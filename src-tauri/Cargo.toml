@@ -1,0 +1,79 @@
+[package]
+name = "linggo"
+version = "0.1.0"
+description = "Linggo — 离线划词翻译（Win10 简化高性能版）"
+edition = "2021"
+
+[lib]
+name = "linggo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# 使 release 二进制内嵌前端资源（tauri build 会自动识别并启用）。
+# 单独跑 cargo build --release 也必须带 --features custom-protocol，否则窗口会连 devUrl(localhost) 白屏报错。
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
+tray-icon = "0.24"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+enigo = "0.6"
+arboard = "3"
+image = "0.25"
+base64 = "0.22"
+llama-cpp-2 = "0.1.151"
+rfd = "0.15"
+tokio = { version = "1", features = ["time", "macros", "rt-multi-thread", "sync"] }
+anyhow = "1"
+ct2rs = { version = "0.10.1", default-features = false, features = ["ruy", "dnnl", "tokenizers"] }
+sentencepiece-rs = "0.2.2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+windows = { version = "0.58", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Graphics_Imaging",
+    "Media_Ocr",
+    "Security_Cryptography",
+    "Storage_Streams",
+    "Win32_System_WinRT",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_HiDpi",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_Networking_WinInet",
+] }
+
+[profile.dev]
+opt-level = 1
+
+# 发布版：更小体积、更快启动与推理（代价是一次 release 构建更久）
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+# 本地补丁：llama-cpp-sys-2 在 CMP0091 下会忽略 CXX_FLAGS 里的 /MT，
+# 必须显式 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded 才能与 ct2rs(/MT) 链接。
+# vendor/crates/llama-cpp-sys-2/build.rs 已内置该 define，且 static_crt 默认 true。
+[patch.crates-io]
+llama-cpp-2 = { path = "vendor/crates/llama-cpp-2" }
+llama-cpp-sys-2 = { path = "vendor/crates/llama-cpp-sys-2" }

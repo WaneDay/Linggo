@@ -1,0 +1,31 @@
+# ---- Node / 前端构建产物 ----
+node_modules/
+dist/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Rust / Tauri 构建产物 ----
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# ---- 本地模型与大文件（运行时下载，不入库）----
+models/
+*.gguf
+
+# ---- 安装包构建输出（脚本为 Linggo.iss，成品输出到仓库上一级的 发布包/）----
+install/
+
+# ---- 编辑器 / 系统 ----
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak
+
+# ---- 本地运行数据（一般不在此目录，防御性忽略）----
+settings.json
+history.json

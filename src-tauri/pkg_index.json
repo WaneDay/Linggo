@@ -1,0 +1,189 @@
+[
+  {
+    "id": "hy-mt2-1.8b-q4-k-m-gguf",
+    "kind": "gguf",
+    "name": "Hy-MT2-1.8B Q4_K_M (GGUF)",
+    "fromCode": "",
+    "toCode": "",
+    "baseUrl": "https://hf-mirror.com/tencent/Hy-MT2-1.8B-GGUF/resolve/main",
+    "files": ["Hy-MT2-1.8B-Q4_K_M.gguf"],
+    "sizeBytes": 1133080448,
+    "version": "1.0"
+  },
+  {
+    "id": "nllb-200-ct2-1.3b",
+    "kind": "nllb",
+    "name": "NLLB-200 1.3B (CT2)",
+    "fromCode": "",
+    "toCode": "",
+    "baseUrl": "https://hf-mirror.com/michaelfeil/ct2fast-nllb-200-distilled-1.3B/resolve/main",
+    "files": ["model.bin", "tokenizer.json"],
+    "sizeBytes": 1395086885,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-en-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→英",
+    "fromCode": "zh",
+    "toCode": "en",
+    "baseUrl": "https://hf-mirror.com/gaudi/opus-mt-zh-en-ctranslate2/resolve/main",
+    "files": ["config.json", "model.bin", "shared_vocabulary.json", "source.spm", "target.spm"],
+    "sizeBytes": 156000000,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-en-zh-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 英→中",
+    "fromCode": "en",
+    "toCode": "zh",
+    "baseUrl": "https://hf-mirror.com/gaudi/opus-mt-en-zh-ctranslate2/resolve/main",
+    "files": ["config.json", "model.bin", "shared_vocabulary.json", "source.spm", "target.spm"],
+    "sizeBytes": 156000000,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-bg-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→保加利亚",
+    "fromCode": "zh",
+    "toCode": "bg",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-bg-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81329501,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-de-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→德",
+    "fromCode": "zh",
+    "toCode": "de",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-de-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81139908,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-fi-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→芬兰",
+    "fromCode": "zh",
+    "toCode": "fi",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-fi-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81145974,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-he-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→希伯来",
+    "fromCode": "zh",
+    "toCode": "he",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-he-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81213237,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-it-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→意大利",
+    "fromCode": "zh",
+    "toCode": "it",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-it-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81140014,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-ms-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→马来",
+    "fromCode": "zh",
+    "toCode": "ms",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-ms-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81126987,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-nl-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→荷兰",
+    "fromCode": "zh",
+    "toCode": "nl",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-nl-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81133336,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-sv-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→瑞典",
+    "fromCode": "zh",
+    "toCode": "sv",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-sv-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81127048,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-uk-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→乌克兰",
+    "fromCode": "zh",
+    "toCode": "uk",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-uk-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 66059878,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-zh-vi-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 中→越南",
+    "fromCode": "zh",
+    "toCode": "vi",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-zh-vi-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 81084117,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-de-zh-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 德→中",
+    "fromCode": "de",
+    "toCode": "zh",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-de-ZH-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 79490255,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-fi-zh-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 芬兰→中",
+    "fromCode": "fi",
+    "toCode": "zh",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-fi-ZH-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 80032242,
+    "version": "1.0"
+  },
+  {
+    "id": "opus-mt-sv-zh-ct2",
+    "kind": "opus",
+    "name": "OPUS-MT 瑞典→中",
+    "fromCode": "sv",
+    "toCode": "zh",
+    "baseUrl": "https://hf-mirror.com/manancode/opus-mt-sv-ZH-ctranslate2-android/resolve/main",
+    "files": ["config.json", "model.bin", "source.spm", "target.spm"],
+    "sizeBytes": 79558418,
+    "version": "1.0"
+  }
+]

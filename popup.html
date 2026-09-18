@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linggo · 翻译</title>
+    <link rel="stylesheet" href="/src/theme.css" />
+  </head>
+  <body>
+    <div id="pop">
+      <div class="pop-drag" data-tauri-drag-region>
+        <span class="pop-title" data-tauri-drag-region>Linggo · 翻译</span>
+        <div class="ring-btn" id="ringWrap" title="自动关闭倒计时 · 悬停暂停">
+          <svg class="ring" viewBox="0 0 22 22">
+            <circle class="ring-bg" cx="11" cy="11" r="9"></circle>
+            <circle class="ring-fg" id="ringFg" cx="11" cy="11" r="9"></circle>
+          </svg>
+          <button class="ghost" id="closeBtn" title="关闭 (Esc)">✕</button>
+        </div>
+      </div>
+
+      <section id="loadingView" class="view hidden">
+        <div class="center-status"><span id="loadingMsg">处理中…</span></div>
+      </section>
+
+      <section id="warnView" class="view hidden">
+        <div class="center-status warn"><span id="warnMsg"></span></div>
+      </section>
+
+      <section id="translationView" class="view hidden">
+        <div class="label">原文</div>
+        <div class="text-box src" id="trSrc"></div>
+        <div class="label">译文</div>
+        <div class="text-box dst" id="trDst"></div>
+        <div class="btn-row">
+          <button id="copyOrigBtn">复制原文</button>
+          <button id="copyTransBtn">复制译文</button>
+        </div>
+      </section>
+
+      <section id="inputView" class="view hidden">
+        <div class="label">输入（Enter 回贴到原窗口 · Esc 关闭）</div>
+        <div class="row">
+          <input type="text" id="inText" placeholder="输入要翻译的内容…" spellcheck="false" />
+          <select id="inTarget" title="目标语言"></select>
+        </div>
+        <div class="text-box dst" id="inResult"></div>
+        <div class="btn-row">
+          <button id="inPasteBtn" class="primary">回贴替换 (Enter)</button>
+          <button id="inCopyBtn">复制译文</button>
+        </div>
+      </section>
+
+      <section id="folderView" class="view hidden">
+        <div class="label">输入文件夹名字（Enter 译名 · Esc 原名 · Delete 取消）</div>
+        <div class="row">
+          <input type="text" id="inFolderText" placeholder="输入要创建的文件夹名字…" spellcheck="false" />
+        </div>
+        <div class="text-box dst" id="folderPreview"></div>
+        <div class="hint" id="folderBase" title=""></div>
+        <div class="btn-row">
+          <button id="folderCreateBtn" class="primary">创建 (Enter)</button>
+        </div>
+      </section>
+
+      <section id="ocrView" class="view hidden">
+        <div class="label">识别文本（F3）</div>
+        <div class="text-box src" id="ocrSrc"></div>
+        <div class="label">译文</div>
+        <div class="text-box dst" id="ocrDst"></div>
+        <div class="btn-row">
+          <button id="ocrCopyTextBtn">复制文本</button>
+          <button id="ocrCopyImgBtn">复制截图</button>
+          <button id="ocrPinBtn">贴图置顶</button>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/popup.ts"></script>
+  </body>
+</html>

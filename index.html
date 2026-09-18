@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Linggo</title>
+    <link rel="stylesheet" href="/src/theme.css" />
+  </head>
+  <body>
+    <div id="app">
+      <section class="langbar">
+        <select id="sourceSelect" title="源语言"></select>
+        <button id="swapBtn" title="交换语言">⇄</button>
+        <select id="targetSelect" title="目标语言"></select>
+        <button id="copyOutBtn">复制</button>
+        <button id="translateBtn" class="primary" title="翻译（Ctrl+Enter）">翻译</button>
+        <button id="histBtn" class="push-right">历史</button>
+        <button id="settingsBtn">设置</button>
+      </section>
+
+      <main class="columns">
+        <div class="col">
+          <div class="col-head"><span>原文</span><span id="inputHint"></span></div>
+          <textarea id="inputArea" spellcheck="false" placeholder="输入或粘贴要翻译的文本……"></textarea>
+        </div>
+        <div class="col">
+          <div class="col-head"><span>译文</span></div>
+          <textarea id="outputArea" readonly spellcheck="false"></textarea>
+        </div>
+      </main>
+
+      <footer class="statusbar">
+        <span id="modelState" class="status-item">模型未加载</span>
+        <span id="gameState" class="status-item hidden">🕹 游戏模式：热键已禁用</span>
+        <span class="flex-spacer"></span>
+        <span id="version" class="status-item"></span>
+      </footer>
+
+      <!-- 更新入口：有新版时显示（右下角圆形 ↓ 按钮） -->
+      <button id="updateFab" class="update-fab hidden" title="">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12" />
+          <path d="M6 11l6 6 6-6" />
+        </svg>
+      </button>
+
+      <!-- 设置抽屉 -->
+      <div id="settingsMask" class="drawer-mask hidden"></div>
+      <aside id="settingsPanel" class="drawer hidden">
+        <div class="drawer-head">
+          <span>设置</span>
+          <button id="settingsClose">✕</button>
+        </div>
+        <div class="drawer-body">
+          <fieldset class="group">
+            <legend>模型（Hy-MT2-1.8B-Q4_K_M）</legend>
+            <div class="row">
+              <span class="label">模型文件</span>
+              <input type="text" id="modelPathInput" placeholder="选择 .gguf 文件" />
+            </div>
+            <div class="row">
+              <button id="modelBrowseBtn">浏览…</button>
+              <button id="modelLoadBtn">加载</button>
+              <button id="modelUnloadBtn">释放内存</button>
+              <button id="modelClearBtn">清空路径</button>
+            </div>
+            <div class="model-status-line" id="modelStatusLine">未加载</div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>快速翻译引擎（NMT · OPUS / NLLB）</legend>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="nmtEnabledCheck" />
+                启用快速翻译引擎（中文相关语对走 OPUS，其他语对走 NLLB）
+              </label>
+            </div>
+            <div class="row">
+              <span class="label">引擎排序</span>
+              <div class="eo-col">
+                <div class="engine-order">
+                  <div class="eo-line"><span class="eo-rank">①</span><select id="engineOrder0"></select></div>
+                  <div class="eo-line"><span class="eo-rank">②</span><select id="engineOrder1"></select></div>
+                  <div class="eo-line"><span class="eo-rank">③</span><select id="engineOrder2"></select></div>
+                </div>
+                <div class="hint">F1–F4 快速翻译按此顺序尝试</div>
+              </div>
+            </div>
+            <div class="row">
+              <span class="label">F5 主窗</span>
+              <select id="f5EngineSelect"></select>
+              <span class="hint">默认最高质量 GGUF，可单独改</span>
+            </div>
+            <div class="model-status-line" id="nmtStatusLine"></div>
+            <div class="row">
+              <button id="nmtUnloadBtn">释放 NMT 内存</button>
+              <span class="hint">NLLB 闲置自动回收（约 1.4GB），OPUS 常驻缓存</span>
+            </div>
+            <div class="row">
+              <span class="label">OPUS zh→en</span>
+              <input type="text" id="nmtOpusZhEnPath" placeholder="自动发现（models 目录）" spellcheck="false" />
+              <button id="nmtOpusZhEnBrowse" title="指定语言包目录">浏览</button>
+            </div>
+            <div class="row">
+              <span class="label">OPUS en→zh</span>
+              <input type="text" id="nmtOpusEnZhPath" placeholder="自动发现（models 目录）" spellcheck="false" />
+              <button id="nmtOpusEnZhBrowse" title="指定语言包目录">浏览</button>
+            </div>
+            <div class="row">
+              <span class="label">NLLB 模型目录</span>
+              <input type="text" id="nmtNllbPath" placeholder="自动发现（models 目录）" spellcheck="false" />
+              <button id="nmtNllbBrowse" title="选择含 model.bin 的目录">浏览</button>
+            </div>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="nmtLlmFallbackCheck" />
+                NMT 不可用时回退大模型翻译
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>翻译方向（F1–F4 自动选择目标语言）</legend>
+            <div class="row">
+              <span class="label">首选语言</span>
+              <select id="preferredLangSelect"></select>
+            </div>
+            <div class="row">
+              <span class="label">次选语言</span>
+              <select id="secondaryLangSelect"></select>
+            </div>
+            <div class="hint">识别到首选语言 → 译为次选语言；识别到其他语言 → 译为首选语言</div>
+          </fieldset>
+
+          <details class="group">
+            <summary>模型市场（Package Index · 默认折叠）</summary>
+            <div class="row">
+              <span class="label">索引地址</span>
+              <input type="text" id="pkgIndexUrl" placeholder="留空 = 内置语言包索引" spellcheck="false" />
+            </div>
+            <div class="row">
+              <button id="pkgRefreshBtn">刷新列表</button>
+              <span class="hint" id="pkgSourceHint"></span>
+            </div>
+            <div class="hint" style="margin:2px 0 4px">可用语言包（点「下载」安装到 models 目录）</div>
+            <div id="pkgList" class="pkg-list"></div>
+            <div class="hint" style="margin:10px 0 4px">已安装（models 目录 · 删除即卸载）</div>
+            <div id="pkgInstalled" class="pkg-list"></div>
+          </details>
+
+          <fieldset class="group">
+            <legend>通用</legend>
+            <div class="row">
+              <span class="label">闲置释放</span>
+              <select id="idleSelect"></select>
+            </div>
+            <div class="row">
+              <span class="label">历史条数</span>
+              <select id="historySelect"></select>
+            </div>
+            <div class="row">
+              <span class="label">外观</span>
+              <select id="themeSelect">
+                <option value="auto">跟随系统</option>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+              </select>
+            </div>
+            <div class="row">
+              <label class="check"><input type="checkbox" id="autostartCheck" /> 开机自启</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>软件更新（GitHub 发布）</legend>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="updateCheckCheck" />
+                启动时自动检查新版本
+              </label>
+            </div>
+            <div class="row">
+              <button id="updateCheckBtn">检查更新</button>
+              <span class="hint">仅检查并到系统托盘提示，不自动下载</span>
+            </div>
+            <div class="model-status-line" id="updateStatusLine">当前 v<span id="updateCurrentVer"></span></div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>OCR（F3 截图识别语言）</legend>
+            <div class="row">
+              <span class="label">识别语言</span>
+              <select id="ocrSelect"></select>
+            </div>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="pinOverlayCheck" />
+                贴图默认显示翻译覆盖图
+              </label>
+            </div>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="pinHintCheck" />
+                贴图显示快捷键提示
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>全局热键（可自定义）</legend>
+            <div class="row"><span class="label">F1 划词翻译</span><input type="text" id="hkF1" /></div>
+            <div class="row"><span class="label">F2 打字翻译</span><input type="text" id="hkF2" /></div>
+            <div class="row"><span class="label">F3 截图翻译</span><input type="text" id="hkF3" /></div>
+            <div class="row"><span class="label">F4 新建文件夹</span><input type="text" id="hkF4" /></div>
+            <div class="row"><span class="label">F5 主窗口</span><input type="text" id="hkF5" /></div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>游戏模式</legend>
+            <div class="row">
+              <label class="check">
+                <input type="checkbox" id="gameBlockCheck" />
+                前台为全屏游戏时自动禁用热键
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend>关于</legend>
+            <div class="model-status-line">Linggo v<span id="aboutVersion"></span> · 完全离线 · 无需联网</div>
+          </fieldset>
+        </div>
+      </aside>
+
+      <!-- 历史抽屉 -->
+      <div id="histMask" class="drawer-mask hidden"></div>
+      <aside id="historyPanel" class="drawer hidden">
+        <div class="drawer-head">
+          <span>翻译历史</span>
+          <span class="drawer-actions">
+            <button id="histClear" class="ghost">清空</button>
+            <button id="histClose">✕</button>
+          </span>
+        </div>
+        <div class="drawer-body" id="histList"></div>
+      </aside>
+
+      <div id="toast" class="toast hidden"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
