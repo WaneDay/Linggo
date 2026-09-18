@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="src-tauri/icons/icon.png" alt="Linggo logo" width="128" height="128" />
-</p>
-
 # Linggo · 离线划词翻译
 
 > 一款 Windows 下**完全离线**的划词 / 打字 / 截图 OCR 翻译工具。基于 Tauri 2 + Rust + 原生 WebView2，本地跑 NMT 与大模型，正文翻译不联网、不上传。
