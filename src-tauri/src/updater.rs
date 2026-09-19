@@ -1,7 +1,9 @@
-// Linggo 更新检测：启动后静默访问 GitHub Releases 检查新版本。
-// 策略（需求确认）：仅检查不自动下载；有新版本 → 托盘系统气球 + F5 主窗右下角圆形按钮；
+// Linggo 更新检测：启动后静默用 git ls-remote 探测 GitHub 最新 tag 检查新版本。
+// 理由（403 排查结论）：api.github.com 匿名有 60 次/时/IP 限流且共享出口 IP 常超限→403；
+// 改用 git 协议 ls-remote --tags（免认证免限流）打包最高 tag 探测，永不触发 api 限流。
+// 仅检查不自动下载；有新版本 → 托盘系统气球 + F5 主窗右下角圆形按钮；
 // 「关闭更新检测」只关启动自动检查，设置页「检查更新」按钮仍可手动强制检查。
-// 全程只用 WinINet（见 wininet.rs），其余功能零联网。
+// 探测用 git 命令行，其余功能零联网。
 
 use tauri::{AppHandle, Emitter};
 use windows::Win32::Foundation::HWND;
@@ -59,11 +61,50 @@ fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
 }
 
 /// 拉取 GitHub Releases 最新一条（含 tag / 发布页 / 正文）
+/// 拉取 GitHub 最新 tag（轻量；免认证免限流：直接 ls-remote --tags 走 git 协议，
+/// 不碰 api.github.com —— 该端点匿名配额 60 次/时/IP，共享出口 IP 极易被限流弹 403）。
 fn latest_release_json() -> Result<serde_json::Value, String> {
-    let url = format!("https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest");
-    let ua = format!("Linggo/{}", crate::constants::APP_VERSION);
-    let body = crate::wininet::http_get_text(&url, 10, &ua)?;
-    serde_json::from_str(&body).map_err(|e| format!("解析发布信息失败：{e}"))
+    let tags_url = format!("https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}.git");
+    let out = std::process::Command::new("git")
+        .args(["ls-remote", "--tags", &tags_url])
+        .output()
+        .map_err(|e| format!("git 不可用：{e}"))?;
+    if !out.status.success() {
+        let msg = String::from_utf8_lossy(&out.stderr);
+        return Err(if msg.trim().is_empty() {
+            "git ls-remote 探测标签失败".to_string()
+        } else {
+            msg.trim().to_string()
+        });
+    }
+    let txt = String::from_utf8_lossy(&out.stdout);
+    let mut best_ver: (u32, u32, u32) = (0, 0, 0);
+    let mut best_tag: Option<String> = None;
+    for line in txt.lines() {
+        let name = match line.split_whitespace().nth(1) {
+            Some(n) => n.trim(),
+            None => continue,
+        };
+        let Some(stripped) = name.strip_prefix("refs/tags/") else {
+            continue;
+        };
+        if stripped.ends_with("^{}") {
+            continue;
+        }
+        if let Some(v) = parse_version(stripped) {
+            if v > best_ver {
+                best_ver = v;
+                best_tag = Some(stripped.to_string());
+            }
+        }
+    }
+    match best_tag {
+        Some(tag) => Ok(serde_json::json!({
+            "tag_name": tag,
+            "html_url": format!("https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases/tag/{tag}")
+        })),
+        None => Err("仓库暂无发布版本".to_string()),
+    }
 }
 
 /// 网络检查 + 版本比较（不 panic）；网络失败时把错误写入 info.error。

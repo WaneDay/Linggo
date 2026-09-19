@@ -16,7 +16,6 @@ mod winutil;
 mod mt_engine;
 mod pkg_index;
 mod explorer;
-mod wininet;
 mod updater;
 
 use tauri::Manager;
