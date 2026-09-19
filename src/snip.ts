@@ -9,7 +9,7 @@ import { emitTo, listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import type { SnipOpenPayload } from "./shared";
-import { applySystemAccent, watchSystemAccent } from "./shared";
+import { applySystemAccent, watchSystemAccent, initTheme } from "./shared";
 
 const win = getCurrentWindow();
 const canvas = document.getElementById("snipCanvas") as HTMLCanvasElement;
@@ -396,6 +396,7 @@ async function confirmSel() {
 // ---------------------------------------------------------------------------
 
 async function init() {
+  void initTheme();
   watchSystemAccent();
   const c = await applySystemAccent();
   if (c) accent = c;

@@ -1,6 +1,6 @@
 [package]
 name = "linggo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Linggo — 离线划词翻译（Win10 简化高性能版）"
 edition = "2021"
 

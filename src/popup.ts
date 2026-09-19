@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { applySystemAccent, watchSystemAccent } from "./shared";
+import { applySystemAccent, watchSystemAccent, initTheme } from "./shared";
 
 interface PopupPayload {
   mode: string;
@@ -337,6 +337,8 @@ function focusAfterShown(id: string) {
 // ---------------------------------------------------------------------------
 
 async function init() {
+  // 主题跟随设置（浅色/深色/跟随系统），并监听设置变更
+  void initTheme();
   // 用 Windows「个性化」强调色点缀环形倒计时（读失败用主题 --accent 兜底）
   watchSystemAccent();
   const accent = await applySystemAccent();

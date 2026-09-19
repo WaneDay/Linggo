@@ -386,14 +386,21 @@ fn translate_inner(
 ) -> Result<String, String> {
     set_status(app, "translating", None);
     let order = effective_engines(app, engine)?;
+    // NMT 引擎即使「加载/翻译失败」也继续尝试后续引擎（如 NLLB 目录残缺时回落 GGUF），
+    // 全部失败才报错——报错时用第一个真实错误（比笼统的「未命中」更有诊断价值）。
+    let mut first_err: Option<String> = None;
     for eng in &order {
         match eng.as_str() {
             // NMT 快速引擎：命中即返回，不加载大模型
             e @ ("opus" | "nllb") => {
-                if let Some(out) =
-                    crate::mt_engine::translate_text_engine(app, text, source, target, e)?
-                {
-                    return Ok(out);
+                match crate::mt_engine::translate_text_engine(app, text, source, target, e) {
+                    Ok(Some(out)) => return Ok(out),
+                    Ok(None) => {}
+                    Err(err) => {
+                        if first_err.is_none() {
+                            first_err = Some(err);
+                        }
+                    }
                 }
             }
             // 大模型（GGUF，最高质量）
@@ -401,7 +408,15 @@ fn translate_inner(
             _ => {}
         }
     }
-    Err("没有可用翻译引擎命中。请检查引擎排序或安装相应模型。".to_string())
+    Err(first_err.unwrap_or_else(|| {
+        "没有可用翻译引擎命中。请检查引擎排序或安装相应模型。".to_string()
+    }))
+}
+
+/// 判定一次生成是否不可接受（需换「配对补全」格式重试）：
+/// 指令回声/问句/垃圾符号（looks_like_instruction_echo）或「我是翻译」式自我介绍（looks_like_self_answer）。
+fn is_bad_output(s: &str) -> bool {
+    crate::prompt::looks_like_instruction_echo(s) || crate::prompt::looks_like_self_answer(s)
 }
 
 /// 大模型翻译：加载 Hy-MT2 GGUF 并分段推理。
@@ -428,12 +443,13 @@ fn translate_llm(
         let budget = segmenter::translate_budget(seg);
         let raw = generate(m, &prompt, budget)?;
         let mut got = crate::prompt::clean_translation(&raw);
-        // 撞指令词（如「翻译」）主格式会回声指令；换「配对补全」示例格式重试一次
-        if crate::prompt::looks_like_instruction_echo(&got) {
+        // 撞指令词（如「翻译」）主格式会回声指令；自我指代式元回答（如「我是翻译人员」/
+        // 私は翻訳者です）说明模型把输入当成了直接提问。两者都换「配对补全」格式重试一次
+        if is_bad_output(&got) {
             let retry = crate::prompt::translate_prompt_retry(&source_name, &target_name, seg);
             let raw2 = generate(m, &retry, budget)?;
             let got2 = crate::prompt::clean_translation(&raw2);
-            if !crate::prompt::looks_like_instruction_echo(&got2) {
+            if !is_bad_output(&got2) {
                 got = got2;
             }
         }
@@ -454,14 +470,20 @@ fn translate_lines_inner(
 ) -> Result<Vec<String>, String> {
     set_status(app, "translating", None);
     let order = effective_engines(app, engine)?;
+    // 与 translate_inner 同策略：NMT 失败记下错误继续，全部失败才报错（优先展示首个真实错误）
+    let mut first_err: Option<String> = None;
     for eng in &order {
         match eng.as_str() {
             // F3 覆盖原文走 NMT 行级批量（一次 CT2 批推理，速度远超大模型）
             e @ ("opus" | "nllb") => {
-                if let Some(out) =
-                    crate::mt_engine::translate_lines_engine(app, texts, source, target, e)?
-                {
-                    return Ok(out);
+                match crate::mt_engine::translate_lines_engine(app, texts, source, target, e) {
+                    Ok(Some(out)) => return Ok(out),
+                    Ok(None) => {}
+                    Err(err) => {
+                        if first_err.is_none() {
+                            first_err = Some(err);
+                        }
+                    }
                 }
             }
             "gguf" => {
@@ -470,7 +492,9 @@ fn translate_lines_inner(
             _ => {}
         }
     }
-    Err("没有可用翻译引擎命中。请检查引擎排序或安装相应模型。".to_string())
+    Err(first_err.unwrap_or_else(|| {
+        "没有可用翻译引擎命中。请检查引擎排序或安装相应模型。".to_string()
+    }))
 }
 
 /// 大模型行级翻译（逐行推理，失败行退回原文保证行数对齐）。
@@ -499,11 +523,11 @@ fn translate_lines_llm(
             }
         };
         let mut got = crate::prompt::clean_translation(&raw);
-        if crate::prompt::looks_like_instruction_echo(&got) {
+        if is_bad_output(&got) {
             let retry = crate::prompt::translate_prompt_retry(&source_name, &target_name, seg);
             if let Ok(raw2) = generate(m, &retry, budget) {
                 let got2 = crate::prompt::clean_translation(&raw2);
-                if !crate::prompt::looks_like_instruction_echo(&got2) {
+                if !is_bad_output(&got2) {
                     got = got2;
                 }
             }
@@ -821,6 +845,10 @@ mod model_tests {
             ("好", "English"),
             ("谢", "English"),
             ("嗡", "English"),
+            ("你是谁", "English"),
+            ("你是谁？", "English"),
+            ("你是谁呀", "English"),
+            ("你叫什么名字", "English"),
         ];
         for (text, tgt) in &cases {
             let src = resolve_source_name(text, "auto");
@@ -828,12 +856,12 @@ mod model_tests {
             let budget = crate::segmenter::translate_budget(text);
             let raw = generate(&model, &prompt, budget).expect("generate");
             let mut got = crate::prompt::clean_translation(&raw);
-            if crate::prompt::looks_like_instruction_echo(&got) {
+            if is_bad_output(&got) {
                 let retry = crate::prompt::translate_prompt_retry(&src, tgt, text);
                 let raw2 = generate(&model, &retry, budget).expect("generate");
                 let got2 = crate::prompt::clean_translation(&raw2);
                 println!("  retry for {text:?}: raw2={raw2:?}");
-                if !crate::prompt::looks_like_instruction_echo(&got2) {
+                if !is_bad_output(&got2) {
                     got = got2;
                 }
             }

@@ -17,9 +17,17 @@
     "fromCode": "",
     "toCode": "",
     "baseUrl": "https://hf-mirror.com/michaelfeil/ct2fast-nllb-200-distilled-1.3B/resolve/main",
-    "files": ["model.bin", "tokenizer.json"],
-    "sizeBytes": 1395086885,
-    "version": "1.0"
+    "files": [
+      "model.bin",
+      "tokenizer.json",
+      "config.json",
+      "shared_vocabulary.json",
+      "special_tokens_map.json",
+      "tokenizer_config.json",
+      "generation_config.json"
+    ],
+    "sizeBytes": 1401013433,
+    "version": "1.1"
   },
   {
     "id": "opus-mt-zh-en-ct2",

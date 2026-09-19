@@ -374,6 +374,11 @@ border-color:var(--danger);
 color:var(--danger)}
 .toast.hidden {
   display:none}
+.hk-input.recording {
+  border-color:var(--accent);
+  background:var(--bg-3);
+  color:var(--muted);
+  cursor:pointer}
 .update-fab {
   position:fixed;
   right:18px;

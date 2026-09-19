@@ -440,6 +440,70 @@ function readHotkeys(): Hotkeys {
   };
 }
 
+// 键盘事件 code → 全局热键可解析的按键名（与 Rust 侧 global-hotkey crate 的 parse_key 对齐）
+const HK_CODE_RE =
+  /^(F([1-9]|1[0-9]|2[0-4])|Numpad(0|1|2|3|4|5|6|7|8|9|Add|Decimal|Divide|Enter|Equal|Multiply|Subtract)|Space|Enter|Escape|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PrintScreen|ScrollLock|CapsLock|NumLock|Minus|Equal|Comma|Period|Quote|Semicolon|Slash|Backquote|Backslash|BracketLeft|BracketRight|AudioVolumeUp|AudioVolumeDown|AudioVolumeMute|MediaPlay|MediaPause|MediaStop|MediaPlayPause|MediaTrackNext|MediaTrackPrevious)$/;
+
+/** e.code → 可存进 settings.hotkeys 的组合键片段；不支持/纯修饰键返回 null */
+function hotkeyPartFromCode(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  return HK_CODE_RE.test(code) ? code : null;
+}
+
+/** 快捷键录入控件：点击聚焦进入录制态，按下组合键即写入设置（Delete/Backspace 清除，Esc/Tab 取消） */
+function bindHotkeyRecorders() {
+  const keys = ["f1", "f2", "f3", "f4", "f5"] as const;
+  for (const key of keys) {
+    const el = $<HTMLInputElement>("hk" + key.toUpperCase());
+    const enterRecording = () => {
+      el.dataset.prevHk = el.value;
+      el.value = "请按新的快捷键…";
+      el.classList.add("recording");
+    };
+    const exitRecording = (restore: boolean) => {
+      el.classList.remove("recording");
+      if (restore) el.value = el.dataset.prevHk ?? "";
+      delete el.dataset.prevHk;
+    };
+    el.addEventListener("focus", (e) => {
+      e.preventDefault();
+      enterRecording();
+    });
+    el.addEventListener("blur", () => {
+      if (el.classList.contains("recording")) exitRecording(true);
+    });
+    el.addEventListener("keydown", (e) => {
+      if (!el.classList.contains("recording")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape" || e.key === "Tab") {
+        exitRecording(true);
+        el.blur();
+        return;
+      }
+      if (e.key === "Backspace" || e.key === "Delete") {
+        exitRecording(false);
+        el.value = "";
+        void pushSettings({ hotkeys: { ...currentSettings().hotkeys, [key]: "" } });
+        el.blur();
+        return;
+      }
+      const part = hotkeyPartFromCode(e.code);
+      if (!part) return; // 纯修饰键（Ctrl/Shift 等）不作为主键：继续等组合
+      const mods: string[] = [];
+      if (e.ctrlKey) mods.push("Ctrl");
+      if (e.altKey) mods.push("Alt");
+      if (e.shiftKey) mods.push("Shift");
+      if (e.metaKey) mods.push("Super"); // Windows 键
+      exitRecording(false);
+      el.value = [...mods, part].join("+");
+      void pushSettings({ hotkeys: { ...currentSettings().hotkeys, [key]: el.value } });
+      el.blur();
+    });
+  }
+}
+
 function bindSettingsControls() {
   sourceSel.addEventListener("change", () => {
     memory.src = sourceSel.value;
@@ -539,11 +603,7 @@ function bindSettingsControls() {
       void pushSettings({ [key]: (e.target as HTMLInputElement).value.trim() } as Partial<Settings>);
     });
   }
-  for (const key of ["f1", "f2", "f3", "f4", "f5"] as const) {
-    $<HTMLInputElement>("hk" + key.toUpperCase()).addEventListener("change", (e) => {
-      void pushSettings({ hotkeys: { ...currentSettings().hotkeys, [key]: (e.target as HTMLInputElement).value.trim() } });
-    });
-  }
+  bindHotkeyRecorders();
 }
 
 function bindModelControls() {

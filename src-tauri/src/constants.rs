@@ -1,7 +1,7 @@
 // Linggo 常量：版本号、默认热键、闲置超时选项、Hy-MT2 支持的 33 种语言。
 // 33 语种为可调数据表：改这里即可增减语言（需求固定为 Hy-MT2 支持的 33 种）。
 
-pub const APP_VERSION: &str = "0.1.0";
+pub const APP_VERSION: &str = "0.1.1";
 
 /// 默认全局热键（与需求一致）
 pub const DEFAULT_HOTKEYS: [(&str, &str); 5] = [

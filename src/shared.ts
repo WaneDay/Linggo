@@ -1,6 +1,30 @@
 // Linggo 前端共享类型（多窗口事件负载；与 Rust serde camelCase 对应）
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+/** 把主题（auto/light/dark）写入 html[data-theme]；auto 删除属性回到「跟随系统」 */
+export function applyTheme(theme: string): void {
+  const root = document.documentElement;
+  if (theme === "auto") delete root.dataset.theme;
+  else root.dataset.theme = theme;
+}
+
+/**
+ * 所有窗口统一主题入口：读当前设置并应用主题，同时监听 settings-changed 跟随主窗切换。
+ * popup/snip/pin 等窗口在 init 时调用一次即可（窗口关闭即销毁，无需手动取消监听）。
+ */
+export async function initTheme(): Promise<void> {
+  try {
+    const s = await invoke<{ theme?: string }>("settings_get");
+    applyTheme(s.theme || "auto");
+  } catch {
+    applyTheme("auto");
+  }
+  void listen<{ theme?: string }>("settings-changed", (e) => {
+    applyTheme(e.payload.theme || "auto");
+  }).catch(() => undefined);
+}
 
 /** F3 截图投递给 snip 窗口（透明压盖铺满虚拟屏幕） */
 export interface SnipOpenPayload {

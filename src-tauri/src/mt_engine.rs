@@ -177,8 +177,15 @@ pub fn is_valid_opus_dir(dir: &Path) -> bool {
         && dir.join("target.spm").exists()
 }
 
+/// NLLB 目录必需全套 CT2 文件：仅 model.bin+tokenizer.json 时 CTranslate2 会因缺失
+/// config.json 抛 nlohmann type_error.302、再缺 shared_vocabulary.json 而无法建翻译器。
+/// 因此校验到三个关键文件齐备，残缺下载不会被误判为「已安装」（可重新下载修复）。
 pub fn is_valid_nllb_dir(dir: &Path) -> bool {
-    dir.is_dir() && dir.join("model.bin").exists() && dir.join("tokenizer.json").exists()
+    dir.is_dir()
+        && dir.join("model.bin").exists()
+        && dir.join("tokenizer.json").exists()
+        && dir.join("config.json").exists()
+        && dir.join("shared_vocabulary.json").exists()
 }
 
 /// 目录名 → 语对：`opus-mt-<src>-<tgt>-...`（如 opus-mt-zh-de-ct2 → ("zh","de")）

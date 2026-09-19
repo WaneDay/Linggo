@@ -13,7 +13,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalPosition, PhysicalSize } from "@tauri-apps/api/window";
 import type { PinLine, PinOpenPayload, PinUpdatePayload, PinTextRow } from "./shared";
-import { applySystemAccent, watchSystemAccent } from "./shared";
+import { applySystemAccent, watchSystemAccent, initTheme } from "./shared";
 
 const win = getCurrentWindow();
 const canvas = document.getElementById("pinCanvas") as HTMLCanvasElement;
@@ -451,6 +451,7 @@ canvas.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 async function init() {
+  void initTheme();
   watchSystemAccent();
   const c = await applySystemAccent();
   if (c) accent = c;
