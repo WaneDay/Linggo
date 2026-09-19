@@ -1,6 +1,134 @@
 // Linggo Hy-MT2 提示词模板。模板为可调常量（Hy-MT2 为 Qwen 系指令模型）。
 // 翻译强制关闭思考 + 强任务限定（预填空 thinking response 块直接出译文）。
 
+// ---------------------------------------------------------------------------
+// 硬兑底疑问短语表：命中即返回确定性译文，完全不经过模型。
+// 覆盖「你是谁/什么意思/为什么」这类弱向语对（如 zh→ja）下 1.8B 模型必然
+// 碎片化退化的短疑问句——装完即用、离线可用、永不随模型退化。
+// ---------------------------------------------------------------------------
+
+/// 判定纯 CJK 疑问语素（问词或语气词）——命中即走「配对补全」硬兑底。
+/// 只对「同源整串」做子串判断，避免把「为什么」这类短词误并入长疑问句。
+fn is_question_morpheme(t: &str) -> bool {
+    const ZH: &[&str] = &["谁", "什么", "为啥", "干嘛", "干吗", "怎么", "怎样", "为什么", "哪儿", "哪里", "几时", "何时", "多少", "哪", "啥", "吗", "呢", "嘛", "嗨", "怎么着", "咋"];
+    const JA: &[&str] = &["誰", "だれ", "何", "なに", "どう", "なぜ", "なんで", "どうして", "いつ", "どこ", "どの", "どんな", "いくら", "か？", "かい？", "ですか", "ですか？", "ますか", "ますか？", "んですか", "かな", "かも"];
+    const KO: &[&str] = &["누구", "뭐", "무엇", "어떻게", "왜", "언제", "어디", "무슨", "몇", "뭐야", "왜요"];
+    const EN: &[&str] = &["who", "what", "why", "how", "when", "where", "which", "whose", "anyone", "anything", "somebody", "somewhere"];
+    if ZH.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    if JA.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    if KO.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    let lower = t.to_ascii_lowercase();
+    EN.iter().any(|q| lower.contains(q))
+}
+
+/// 疑问句短词归一化：去首尾空白 + 尾标点（？?！!。? 等），便于查表。
+fn normalize_question(t: &str) -> String {
+    t.trim()
+        .trim_end_matches(['？', '?', '！', '!', '。', '，', ',', ';', '；', '、', '…', '～', '~'])
+        .to_string()
+}
+
+/// 疑问→译文 硬兑底表（source,target,key → 译文）。key 用归一化后的输入。
+/// 只加「必对」的高频短疑问句；长句/整段不要放进来（避免误覆盖）。
+const QUESTION_PAIRS: &[(&str, &str, &str, &str)] = &[
+    // zh → ja
+    ("zh", "ja", "你是谁", "あなたは誰ですか"),
+    ("zh", "ja", "你是谁啊", "あなたは誰ですか"),
+    ("zh", "ja", "你是谁呀", "あなたは誰ですか"),
+    ("zh", "ja", "什么意思", "どういう意味ですか"),
+    ("zh", "ja", "什么意思啊", "どういう意味ですか"),
+    ("zh", "ja", "什么意思呀", "どういう意味ですか"),
+    ("zh", "ja", "为什么", "なぜですか"),
+    ("zh", "ja", "为什么啊", "なぜですか"),
+    ("zh", "ja", "为什么呀", "なぜですか"),
+    ("zh", "ja", "为什么这么", "どうしてそんなに"),
+    ("zh", "ja", "你是谁呢", "あなたは誰ですか"),
+    ("zh", "ja", "你好吗", "お元気ですか"),
+    ("zh", "ja", "你好吗啊", "お元気ですか"),
+    ("zh", "ja", "你还好吗", "お元気ですか"),
+    ("zh", "ja", "你叫什么名字", "お名前は何ですか"),
+    ("zh", "ja", "你在哪", "どこにいますか"),
+    ("zh", "ja", "你在哪里", "どこにいますか"),
+    ("zh", "ja", "你干什么", "何をしていますか"),
+    ("zh", "ja", "你在干什么", "何をしていますか"),
+    ("zh", "ja", "你是谁呀？", "あなたは誰ですか"),
+    ("zh", "ja", "什么意思？", "どういう意味ですか"),
+    ("zh", "ja", "为什么？", "なぜですか"),
+    // ja → zh
+    ("ja", "zh", "あなたは誰ですか", "你是谁"),
+    ("ja", "zh", "あなたは誰だ", "你是谁"),
+    ("ja", "zh", "お前は誰だ", "你是谁"),
+    ("ja", "zh", "どういう意味", "什么意思"),
+    ("ja", "zh", "なぜ", "为什么"),
+    ("ja", "zh", "なぜですか", "为什么"),
+    ("ja", "zh", "どうして", "为什么"),
+    ("ja", "zh", "君は誰", "你是谁"),
+    ("ja", "zh", "お名前は", "你叫什么名字"),
+    ("ja", "zh", "元気ですか", "你好吗"),
+    // zh → en
+    ("zh", "en", "你是谁", "Who are you?"),
+    ("zh", "en", "什么意思", "What does it mean?"),
+    ("zh", "en", "为什么", "Why?"),
+    ("zh", "en", "你好吗", "How are you?"),
+    ("zh", "en", "你还好吗", "How are you?"),
+    ("zh", "en", "你叫什么名字", "What's your name?"),
+    ("zh", "en", "你在哪", "Where are you?"),
+    ("zh", "en", "你在哪里", "Where are you?"),
+    ("zh", "en", "你干什么", "What are you doing?"),
+    ("zh", "en", "你在干什么", "What are you doing?"),
+    // en → zh
+    ("en", "zh", "whoareyou", "你是谁"),
+    ("en", "zh", "whatdoesitmean", "什么意思"),
+    ("en", "zh", "why", "为什么"),
+    ("en", "zh", "howareyou", "你好吗"),
+    ("en", "zh", "whatsyourname", "你叫什么名字"),
+    ("en", "zh", "whereareyou", "你在哪"),
+    ("en", "zh", "whatareyoudoing", "你在干什么"),
+    // zh → ko
+    ("zh", "ko", "你是谁", "누구세요?"),
+    ("zh", "ko", "什么意思", "무슨 뜻이에요?"),
+    ("zh", "ko", "为什么", "왜요?"),
+    ("zh", "ko", "你好吗", "잘 지내세요?"),
+    // ko → zh
+    ("ko", "zh", "누구", "谁"),
+    ("ko", "zh", "누구세요", "你是谁"),
+    ("ko", "zh", "무슨뜻", "什么意思"),
+    ("ko", "zh", "어떻게", "怎么"),
+    ("ko", "zh", "왜", "为什么"),
+];
+
+/// 硬兑底查询：命中返回 Some(确定性译文)，未命中 None。
+/// source/target 为语言代码（zh/ja/en/ko/…）。
+pub fn hard_question_translation(source: &str, target: &str, text: &str) -> Option<String> {
+    let key = normalize_question(text);
+    if key.is_empty() {
+        return None;
+    }
+    // 英文 key 做空格折叠 + 小写（"Who are you?" → whoareyou）
+    let eng_key = key
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>();
+    let src = source.trim();
+    let tgt = target.trim();
+    for &(s, t, k, out) in QUESTION_PAIRS {
+        if s != src || t != tgt {
+            continue;
+        }
+        if key.as_str() == k || (k.chars().all(|c| c.is_ascii()) && eng_key == k) {
+            return Some(out.to_string());
+        }
+    }
+    None
+}
+
 /// 组装 ChatML。no_think=true 时预填空 [thinking response] 块，直接出结果。
 fn chatml(system: &str, user: &str, no_think: bool) -> String {
     let tail = if no_think {
@@ -39,7 +167,8 @@ pub fn translate_prompt(source_name: &str, target_name: &str, text: &str) -> Str
 }
 
 /// 短词/短语判定：≤8 个字符且不含句子性标点 → 走字典式提示词（短词对模型最稳）。
-/// 超过或含标点（句号/逗号/问号等）视为句子 → 走译员式。
+/// 超过、含标点、或带疑问词/语气词的短句（你是谁、什么意思、好吗）→ 走译员式整句翻译，
+/// 否则弱向语对（如 zh→ja）会把疑问短句退化成语片碎片（实测「你是谁」→「人です」）。
 fn is_dictionary_style_text(text: &str) -> bool {
     let t = text.trim();
     if t.chars().count() > 8 {
@@ -50,7 +179,42 @@ fn is_dictionary_style_text(text: &str) -> bool {
             return false;
         }
     }
-    true
+    !looks_like_question_text(t)
+}
+
+/// 疑问句特征词/语气词（中/日/韩/英）。命中即按整句翻译，避免词典式碎片化。
+fn looks_like_question_text(t: &str) -> bool {
+    let chars = t.chars().count();
+    // 句尾语气词（吗/呢/嘛/ん）→ 一整句
+    if chars >= 2 && (t.ends_with('吗') || t.ends_with('呢') || t.ends_with('嘛') || t.ends_with('ん')) {
+        return true;
+    }
+    if chars < 3 {
+        return false; // 单个/两个字的词（谁、什么、翻译）保持词典式
+    }
+    const ZH_Q: &[&str] = &[
+        "谁", "什么", "干啥", "干嘛", "干吗", "啥", "哪", "怎么", "怎样", "咋", "多少",
+        "为甚", "为何", "为什么", "凭啥", "几时", "如何",
+    ];
+    if ZH_Q.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    const JA_Q: &[&str] = &[
+        "誰", "だれ", "何", "どう", "なぜ", "なんで", "いつ", "どこ", "どんな", "どの", "いくら",
+    ];
+    if JA_Q.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    const KO_Q: &[&str] = &["누구", "뭐", "무엇", "어떻게", "왜", "언제", "어디", "무슨", "몇"];
+    if KO_Q.iter().any(|q| t.contains(q)) {
+        return true;
+    }
+    const EN_Q: &[&str] = &[
+        "who ", "what ", "why ", "how ", "when ", "where ", "which ", "whose", "are you",
+        "do you", "did you", "does it", "can you", "is it", "what's", "who's",
+    ];
+    let lower = t.to_ascii_lowercase();
+    EN_Q.iter().any(|q| lower.contains(q))
 }
 
 /// 翻译提示词（重试格式）：对「翻译」这类撞指令词，主格式会把指令回声出来
@@ -172,6 +336,29 @@ pub fn looks_like_self_answer(s: &str) -> bool {
 
 /// 强健化后处理：剥掉模型偶尔残留的标签/引导语/外层引号，保证「只输出译文」。
 pub fn clean_translation(s: &str) -> String {
+    // 目标语名回声白名单：剥标签前缀/尾部标签行时用来判定「{X}: 」里的 X 是不是语名。
+    // 不限于 ASCII 字母词 —— CJK 目标名（中国語/中文/日本語…）若不含进来，模型回显
+    // 「中国語: 教えてください」这类前缀时会因 is_ascii_alphabetic 不成立而剥不掉。
+    const LANG_LABELS: &[&str] = &[
+        "Chinese",
+        "English",
+        "Japanese",
+        "Korean",
+        "Chinese (Simplified)",
+        "中文",
+        "中文（简体）",
+        "简体中文",
+        "英文",
+        "英語",
+        "英语",
+        "中国語",
+        "中国语",
+        "日本語",
+        "日本语",
+        "한국어",
+        "韓語",
+        "韩语",
+    ];
     let mut s = s.trim().to_string();
 
     // 模型偶尔「回声」整个 ChatML 模板（把 user 块 + <|im_start|>assistant 原样吐出来）。
@@ -237,6 +424,16 @@ pub fn clean_translation(s: &str) -> String {
                 break;
             }
         }
+        // 模型偶尔把短词回声成 `#word#` 式包裹（"#insane#"）——剥掉两端 # 还原译文载体。
+        // 剥完若只剩原文（§is_bad_output 会判）则仍走配对重试，不影响判定。
+        if !advanced && s.len() >= 2 && s.starts_with('#') && s.ends_with('#') {
+            let inner = s[1..s.len() - 1].trim();
+            if !inner.is_empty() && !crate::mt_engine::detect_script(inner).is_none() {
+                let _ = inner; // detect_script 仅作非标点校验信号用
+            }
+            s = inner.to_string();
+            advanced = true;
+        }
         // 引导语（"The user says \"谢谢\". Here is the English translation:\nThank you."）
         // 在节奏允许时剥掉前后引号与导语，只留译文
         if !advanced {
@@ -255,19 +452,42 @@ pub fn clean_translation(s: &str) -> String {
                 }
             }
         }
-        // 对齐标签前缀（"Chinese: good" / "English: Thank you."）：剥掉 `{单字节词}: `
+        // 对齐标签前缀（"Chinese: good" / "English: Thank you." / "中国語: 教えてください"）：
+        // 剥掉 `{目标语名}: `——语名不限于 ASCII 字母词，CJK 目标名也须识别，否则
+        // 「中国語: 教えてください」这类 CJK 目标名回声会原样混进译文。
         #[allow(clippy::collapsible_if)]
         if !advanced {
             if let Some(i) = s.find(':') {
                 let before = &s[..i];
-                if !before.is_empty()
-                    && before.chars().all(|c| c.is_ascii_alphabetic() || c == ' ')
-                {
+                let ok = (!before.is_empty()
+                    && before.chars().all(|c| c.is_ascii_alphabetic() || c == ' '))
+                    || LANG_LABELS.contains(&before.trim());
+                if ok {
                     let rest = s[i + 1..].trim_start();
                     if !rest.is_empty() {
                         s = rest.to_string();
                         advanced = true;
                     }
+                }
+            }
+        }
+        // 尾部目标语名回声行：模型常在译文后自补一行 `{语名}:`（"crazy\nChinese:" 的尾行
+        // "Chinese:" / "教えてください\n中国語:" 的尾行），剥掉 `{语名}:` 尾行避免标签混入译文。
+        #[allow(clippy::collapsible_if)]
+        if !advanced {
+            if let Some(nl) = s.rfind('\n') {
+                let tail = &s[nl + 1..].trim_end();
+                let is_label = if let Some(label) = tail.strip_suffix(':') {
+                    let name = label.trim_end();
+                    !name.is_empty()
+                        && (name.chars().all(|c| c.is_ascii_alphabetic() || c == ' ')
+                            || LANG_LABELS.contains(&name))
+                } else {
+                    false
+                };
+                if is_label {
+                    s = s[..nl].trim_end().to_string();
+                    advanced = true;
                 }
             }
         }
@@ -356,9 +576,16 @@ mod tests {
         assert!(is_dictionary_style_text("随便"));
         assert!(is_dictionary_style_text("你好"));
         assert!(is_dictionary_style_text("希望工程"));
+        assert!(is_dictionary_style_text("什么"), "双字疑问词本身仍按词翻译");
         assert!(!is_dictionary_style_text("他昨晚熬夜看球赛，今天一直打哈欠。"));
         assert!(!is_dictionary_style_text("Please make sure to bring your passport to the airport."));
         assert!(!is_dictionary_style_text("想必这就是新婚家具吧"));
+        // 短疑问句（无标点也应按整句翻译，避免词典式碎片）
+        assert!(!is_dictionary_style_text("你是谁"));
+        assert!(!is_dictionary_style_text("什么意思"));
+        assert!(!is_dictionary_style_text("为什么"));
+        assert!(!is_dictionary_style_text("好吗"));
+        assert!(!is_dictionary_style_text("Who are you"));
     }
 
     #[test]
@@ -402,12 +629,13 @@ mod tests {
 
     #[test]
     fn translate_prompt_question_input_is_forced_to_data() {
-        // 「你是谁」是短词走字典式，但不得被当成对助手的提问来回答
+        // 短疑问句「你是谁」走译员式整句翻译 + 显式禁止应答。
+        // （先前按短词走词典式，弱向语对会碎片化成「人です」式退化，故改为整句）
         let p = translate_prompt("Chinese", "Japanese", "你是谁");
-        assert!(p.contains("bilingual dictionary"));
-        assert!(p.contains("do not answer"), "必须显式禁止应答");
+        assert!(p.contains("professional translator"));
+        assert!(p.contains("never answer"), "句子提示词必须禁止应答");
         assert!(!p.to_ascii_lowercase().contains("translate the"));
-        // 长问句走译员式，同样禁止应答
+        // 长问句同样走译员式，禁止应答
         let q = translate_prompt("Chinese", "Japanese", "你叫什么名字？");
         assert!(q.contains("professional translator"));
         assert!(q.contains("never answer"), "句子提示词必须禁止应答");

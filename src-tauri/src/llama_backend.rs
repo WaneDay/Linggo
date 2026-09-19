@@ -384,6 +384,10 @@ fn translate_inner(
     target: &str,
     engine: Option<&str>,
 ) -> Result<String, String> {
+    // 硬兑底疑问短句：命中即返回确定性译文，完全不经过任何模型/引擎（装完即用、永不退化）。
+    if let Some(hit) = crate::prompt::hard_question_translation(source, target, text) {
+        return Ok(hit);
+    }
     set_status(app, "translating", None);
     let order = effective_engines(app, engine)?;
     // NMT 引擎即使「加载/翻译失败」也继续尝试后续引擎（如 NLLB 目录残缺时回落 GGUF），
@@ -414,9 +418,23 @@ fn translate_inner(
 }
 
 /// 判定一次生成是否不可接受（需换「配对补全」格式重试）：
-/// 指令回声/问句/垃圾符号（looks_like_instruction_echo）或「我是翻译」式自我介绍（looks_like_self_answer）。
-fn is_bad_output(s: &str) -> bool {
-    crate::prompt::looks_like_instruction_echo(s) || crate::prompt::looks_like_self_answer(s)
+/// 指令回声/问句/垃圾符号（looks_like_instruction_echo）、「我是翻译」式自我介绍（looks_like_self_answer），
+/// 以及「clean 后译文仍等于原文」（如 `#insane#` 剥 `#` 后仍是 insane）——后者正是
+/// F1 短词项「输入英文译文还是英文」的根因：模型把词回声成 #word#，剥完==原文必判坏重试。
+fn is_bad_output(translated: &str, original: &str) -> bool {
+    crate::prompt::looks_like_instruction_echo(translated)
+        || crate::prompt::looks_like_self_answer(translated)
+        || norm_eq(translated, original)
+}
+
+/// 归一后比较：去全角/半角空格、忽略大小写（"insane"≡"insane"、"谢谢"≡"谢谢"）。
+fn norm_eq(a: &str, b: &str) -> bool {
+    let na: String = a.chars().filter(|c| !c.is_whitespace()).collect();
+    let nb: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+    if na.is_empty() || nb.is_empty() {
+        return false;
+    }
+    na.eq_ignore_ascii_case(&nb) || na == nb
 }
 
 /// 大模型翻译：加载 Hy-MT2 GGUF 并分段推理。
@@ -445,11 +463,11 @@ fn translate_llm(
         let mut got = crate::prompt::clean_translation(&raw);
         // 撞指令词（如「翻译」）主格式会回声指令；自我指代式元回答（如「我是翻译人员」/
         // 私は翻訳者です）说明模型把输入当成了直接提问。两者都换「配对补全」格式重试一次
-        if is_bad_output(&got) {
+        if is_bad_output(&got, seg) {
             let retry = crate::prompt::translate_prompt_retry(&source_name, &target_name, seg);
             let raw2 = generate(m, &retry, budget)?;
             let got2 = crate::prompt::clean_translation(&raw2);
-            if !is_bad_output(&got2) {
+            if !is_bad_output(&got2, &seg) {
                 got = got2;
             }
         }
@@ -523,13 +541,12 @@ fn translate_lines_llm(
             }
         };
         let mut got = crate::prompt::clean_translation(&raw);
-        if is_bad_output(&got) {
+        if is_bad_output(&got, seg) {
             let retry = crate::prompt::translate_prompt_retry(&source_name, &target_name, seg);
-            if let Ok(raw2) = generate(m, &retry, budget) {
-                let got2 = crate::prompt::clean_translation(&raw2);
-                if !is_bad_output(&got2) {
-                    got = got2;
-                }
+            let raw2 = generate(m, &retry, budget)?;
+            let got2 = crate::prompt::clean_translation(&raw2);
+            if !is_bad_output(&got2, seg) {
+                got = got2;
             }
         }
         out.push(got);
@@ -856,12 +873,12 @@ mod model_tests {
             let budget = crate::segmenter::translate_budget(text);
             let raw = generate(&model, &prompt, budget).expect("generate");
             let mut got = crate::prompt::clean_translation(&raw);
-            if is_bad_output(&got) {
+            if is_bad_output(&got, text) {
                 let retry = crate::prompt::translate_prompt_retry(&src, tgt, text);
                 let raw2 = generate(&model, &retry, budget).expect("generate");
                 let got2 = crate::prompt::clean_translation(&raw2);
                 println!("  retry for {text:?}: raw2={raw2:?}");
-                if !is_bad_output(&got2) {
+                if !is_bad_output(&got2, text) {
                     got = got2;
                 }
             }
