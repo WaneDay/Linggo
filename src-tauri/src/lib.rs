@@ -14,6 +14,7 @@ mod ocr;
 mod win32;
 mod winutil;
 mod mt_engine;
+mod google_engine;
 mod pkg_index;
 mod explorer;
 mod updater;
@@ -173,6 +174,8 @@ pub fn run() {
             crate::mt_engine::nmt_status,
             crate::mt_engine::nmt_pick_dir,
             crate::mt_engine::nmt_unload,
+            crate::google_engine::google_probe,
+            crate::google_engine::google_status,
             crate::pkg_index::pkg_list,
             crate::pkg_index::pkg_download,
             crate::pkg_index::pkg_cancel_download,

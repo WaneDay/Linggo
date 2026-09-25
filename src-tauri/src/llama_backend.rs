@@ -352,6 +352,7 @@ fn resolve_source_name(text: &str, source: &str) -> String {
 /// 结合引擎排序与开关，计算本次请求实际尝试的引擎序列。
 /// preferred = None 用用户引擎排序（F1–F4）；Some(引擎) = 该引擎置顶（F5）。
 /// 兼容开关：NMT 停用则去掉 opus/nllb；NMT 启用但关闭大模型回落则去掉 gguf。
+/// Google（在线翻译）不受 NMT 开关约束——它不是本地 NMT 引擎，停用 NMT 不应关掉它。
 fn effective_engines(app: &AppHandle, preferred: Option<&str>) -> Result<Vec<String>, String> {
     let s = crate::settings::current(app);
     let mut order: Vec<String> = Vec::new();
@@ -395,6 +396,18 @@ fn translate_inner(
     let mut first_err: Option<String> = None;
     for eng in &order {
         match eng.as_str() {
+            // 在线引擎（Google Translate）：断网 / 被墙 / 限流 → 记下错误继续下一引擎
+            "google" => {
+                match crate::google_engine::translate_text(app, text, source, target) {
+                    Ok(Some(out)) => return Ok(out),
+                    Ok(None) => {}
+                    Err(err) => {
+                        if first_err.is_none() {
+                            first_err = Some(err);
+                        }
+                    }
+                }
+            }
             // NMT 快速引擎：命中即返回，不加载大模型
             e @ ("opus" | "nllb") => {
                 match crate::mt_engine::translate_text_engine(app, text, source, target, e) {
@@ -492,6 +505,18 @@ fn translate_lines_inner(
     let mut first_err: Option<String> = None;
     for eng in &order {
         match eng.as_str() {
+            // 在线引擎（Google Translate）：逐行并发请求，失败行退回原文保证行数对齐
+            "google" => {
+                match crate::google_engine::translate_lines(app, texts, source, target) {
+                    Ok(Some(out)) => return Ok(out),
+                    Ok(None) => {}
+                    Err(err) => {
+                        if first_err.is_none() {
+                            first_err = Some(err);
+                        }
+                    }
+                }
+            }
             // F3 覆盖原文走 NMT 行级批量（一次 CT2 批推理，速度远超大模型）
             e @ ("opus" | "nllb") => {
                 match crate::mt_engine::translate_lines_engine(app, texts, source, target, e) {

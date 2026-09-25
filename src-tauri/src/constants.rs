@@ -1,7 +1,7 @@
 // Linggo 常量：版本号、默认热键、闲置超时选项、Hy-MT2 支持的 33 种语言。
 // 33 语种为可调数据表：改这里即可增减语言（需求固定为 Hy-MT2 支持的 33 种）。
 
-pub const APP_VERSION: &str = "0.1.1";
+pub const APP_VERSION: &str = "0.1.2";
 
 /// 默认全局热键（与需求一致）
 pub const DEFAULT_HOTKEYS: [(&str, &str); 5] = [
@@ -26,20 +26,24 @@ pub const DEFAULT_PREFERRED_LANG: &str = "zh";
 pub const DEFAULT_SECONDARY_LANG: &str = "en";
 
 // ---------------------------------------------------------------------------
-// 翻译引擎（OPUS/NLLB 为 NMT 快速引擎，GGUF 为大模型）
+// 翻译引擎（Google = 在线翻译；OPUS/NLLB 为 NMT 快速引擎；GGUF 为大模型）
 // ---------------------------------------------------------------------------
 
 /// 引擎标识（与配置 engine_order / f5_engine 一致）
-pub const ENGINES: [&str; 3] = ["opus", "nllb", "gguf"];
+pub const ENGINES: [&str; 4] = ["google", "opus", "nllb", "gguf"];
 
-/// 各引擎二字特色描述（与 ENGINES 一一对应）
-pub const ENGINE_TAGS: [&str; 3] = ["极快", "快速", "质量"];
+/// 各引擎特色描述（与 ENGINES 一一对应）
+pub const ENGINE_TAGS: [&str; 4] = ["谷歌", "极快", "快速", "质量"];
 
 /// 默认引擎排序（F1–F4 快速功能按此顺序优先命中）
-pub const DEFAULT_ENGINE_ORDER: [&str; 3] = ["opus", "nllb", "gguf"];
+/// Google Translate 置顶：联网即用、断网/被墙自动回落 OPUS → NLLB → GGUF（回落逻辑见 llama_backend）
+pub const DEFAULT_ENGINE_ORDER: [&str; 4] = ["google", "opus", "nllb", "gguf"];
 
-/// F5 主窗口默认引擎：最高质量大模型（可在设置单独改）
-pub const DEFAULT_F5_ENGINE: &str = "gguf";
+/// F5 主窗口默认引擎：Google Translate（可在设置单独改回 GGUF 最高质量）
+pub const DEFAULT_F5_ENGINE: &str = "google";
+
+/// 旧版本（0.1.1 及更早）的 3 引擎排序，用于升级迁移：把 google 插到最前
+pub const LEGACY_ENGINE_ORDER: [&str; 3] = ["opus", "nllb", "gguf"];
 
 pub fn is_engine(s: &str) -> bool {
     ENGINES.contains(&s)

@@ -68,11 +68,11 @@
           </fieldset>
 
           <fieldset class="group">
-            <legend>快速翻译引擎（NMT · OPUS / NLLB）</legend>
+            <legend>翻译引擎（在线 Google · 本地 NMT OPUS / NLLB · 大模型 GGUF）</legend>
             <div class="row">
               <label class="check">
                 <input type="checkbox" id="nmtEnabledCheck" />
-                启用快速翻译引擎（中文相关语对走 OPUS，其他语对走 NLLB）
+                启用本地快速翻译引擎（中文相关语对走 OPUS，其他语对走 NLLB）
               </label>
             </div>
             <div class="row">
@@ -82,16 +82,23 @@
                   <div class="eo-line"><span class="eo-rank">①</span><select id="engineOrder0"></select></div>
                   <div class="eo-line"><span class="eo-rank">②</span><select id="engineOrder1"></select></div>
                   <div class="eo-line"><span class="eo-rank">③</span><select id="engineOrder2"></select></div>
+                  <div class="eo-line"><span class="eo-rank">④</span><select id="engineOrder3"></select></div>
                 </div>
-                <div class="hint">F1–F4 快速翻译按此顺序尝试</div>
+                <div class="hint">F1–F4 快速翻译按此顺序尝试（默认①Google Translate）</div>
               </div>
             </div>
             <div class="row">
               <span class="label">F5 主窗</span>
               <select id="f5EngineSelect"></select>
-              <span class="hint">默认最高质量 GGUF，可单独改</span>
+              <span class="hint">默认 Google Translate，可单独改回 GGUF</span>
             </div>
             <div class="model-status-line" id="nmtStatusLine"></div>
+            <div class="row">
+              <span class="label">Google 连通性</span>
+              <button id="googleProbeBtn">检测</button>
+              <span class="hint" id="googleProxyHint"></span>
+            </div>
+            <div class="model-status-line" id="googleStatusLine">尚未检测</div>
             <div class="row">
               <button id="nmtUnloadBtn">释放 NMT 内存</button>
               <span class="hint">NLLB 闲置自动回收（约 1.4GB），OPUS 常驻缓存</span>

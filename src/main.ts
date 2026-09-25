@@ -18,9 +18,18 @@ interface Hotkeys {
 }
 
 // 翻译引擎元信息（与 Rust constants::ENGINES / ENGINE_TAGS 一一对应）
-const ENGINE_META: Record<string, string> = { opus: "极快", nllb: "快速", gguf: "质量" };
+const ENGINE_META: Record<string, string> = {
+  google: "谷歌",
+  opus: "极快",
+  nllb: "快速",
+  gguf: "质量",
+};
 const ENGINE_LABEL = (code: string): string => `${code.toUpperCase()} · ${ENGINE_META[code] ?? ""}`;
-const DEFAULT_ENGINE_ORDER = ["opus", "nllb", "gguf"];
+const ENGINES = ["google", "opus", "nllb", "gguf"];
+const DEFAULT_ENGINE_ORDER = [...ENGINES];
+const DEFAULT_F5_ENGINE = "google";
+/** 引擎排序下拉框槽位 id（与 index.html 的 engineOrder0..3 一致） */
+const ORDER_SLOT_IDS = ["engineOrder0", "engineOrder1", "engineOrder2", "engineOrder3"] as const;
 
 interface Settings {
   theme: string;
@@ -66,6 +75,14 @@ interface MtStatus {
   nllb: string;
   active: string;
   note: string;
+}
+
+/** Google Translate 连通性（与 Rust google_engine::GoogleStatus 对应，camelCase） */
+interface GoogleStatus {
+  reachable: boolean | null;
+  note: string;
+  cooling: boolean;
+  proxy: string;
 }
 
 interface PkgEntry {
@@ -385,10 +402,30 @@ function fillSelect(el: HTMLSelectElement, items: { code: string; zh: string }[]
   }
 }
 
-/** 填充引擎选择框（OPUS·极快 / NLLB·快速 / GGUF·质量） */
+/**
+ * 引擎排序归一：过滤非法引擎、去重、缺项补默认（旧 3 槽配置在 Rust 侧已迁移为 4 槽，
+ * 这里再兜一层，保证下拉框永远显示 4 个合法且互不重复的引擎）。
+ */
+function normalizeEngineOrder(raw: unknown): string[] {
+  const out: string[] = [];
+  if (Array.isArray(raw)) {
+    for (const e of raw) {
+      if (typeof e === "string" && ENGINES.includes(e) && !out.includes(e) && out.length < ENGINES.length) {
+        out.push(e);
+      }
+    }
+  }
+  if (out.length < ENGINES.length && !out.includes("google")) out.unshift("google");
+  for (const e of DEFAULT_ENGINE_ORDER) {
+    if (out.length < ENGINES.length && !out.includes(e)) out.push(e);
+  }
+  return out.length === ENGINES.length ? out : [...DEFAULT_ENGINE_ORDER];
+}
+
+/** 填充引擎选择框（GOOGLE·谷歌 / OPUS·极快 / NLLB·快速 / GGUF·质量） */
 function fillEngineOptions(el: HTMLSelectElement) {
   el.textContent = "";
-  for (const code of ["opus", "nllb", "gguf"]) {
+  for (const code of ENGINES) {
     const opt = document.createElement("option");
     opt.value = code;
     opt.textContent = ENGINE_LABEL(code);
@@ -412,12 +449,11 @@ function applySettingsToUi() {
   $<HTMLInputElement>("pinOverlayCheck").checked = s.pinDefaultOverlay;
   $<HTMLInputElement>("pinHintCheck").checked = s.pinShowTip !== false;
   $<HTMLInputElement>("nmtEnabledCheck").checked = s.nmtEnabled;
-  const order =
-    Array.isArray(s.engineOrder) && s.engineOrder.length === 3 ? s.engineOrder : DEFAULT_ENGINE_ORDER;
-  $<HTMLSelectElement>("engineOrder0").value = order[0];
-  $<HTMLSelectElement>("engineOrder1").value = order[1];
-  $<HTMLSelectElement>("engineOrder2").value = order[2];
-  $<HTMLSelectElement>("f5EngineSelect").value = s.f5Engine || "gguf";
+  const order = normalizeEngineOrder(s.engineOrder);
+  ORDER_SLOT_IDS.forEach((id, i) => {
+    $<HTMLSelectElement>(id).value = order[i];
+  });
+  $<HTMLSelectElement>("f5EngineSelect").value = s.f5Engine || DEFAULT_F5_ENGINE;
   $<HTMLInputElement>("nmtLlmFallbackCheck").checked = s.nmtLlmFallback;
   $<HTMLInputElement>("pkgIndexUrl").value = s.packageIndexUrl || "";
   $<HTMLInputElement>("updateCheckCheck").checked = s.checkUpdatesEnabled !== false;
@@ -540,20 +576,16 @@ function bindSettingsControls() {
   $<HTMLInputElement>("nmtEnabledCheck").addEventListener("change", (e) => {
     void pushSettings({ nmtEnabled: (e.target as HTMLInputElement).checked });
   });
-  const orderSelects = ["engineOrder0", "engineOrder1", "engineOrder2"] as const;
-  orderSelects.forEach((id, i) => {
+  ORDER_SLOT_IDS.forEach((id, i) => {
     $<HTMLSelectElement>(id).addEventListener("change", () => {
-      const old =
-        Array.isArray(currentSettings().engineOrder) && currentSettings().engineOrder.length === 3
-          ? [...currentSettings().engineOrder]
-          : [...DEFAULT_ENGINE_ORDER];
+      const old = normalizeEngineOrder(currentSettings().engineOrder);
       const v = $<HTMLSelectElement>(id).value;
       const dup = old.indexOf(v);
       if (dup !== -1 && dup !== i) {
         old[dup] = old[i]; // 与其他槽位复用同一引擎时交换原值
       }
       old[i] = v;
-      orderSelects.forEach((oid, k) => ($<HTMLSelectElement>(oid).value = old[k]));
+      ORDER_SLOT_IDS.forEach((oid, k) => ($<HTMLSelectElement>(oid).value = old[k]));
       void pushSettings({ engineOrder: old });
     });
   });
@@ -639,7 +671,7 @@ function bindModelControls() {
   $<HTMLButtonElement>("modelClearBtn").addEventListener("click", () => {
     $<HTMLInputElement>("modelPathInput").value = "";
     void pushSettings({ modelPath: "" });
-    toast("已清空模型路径，翻译将仅由 NMT 引擎（OPUS/NLLB）承担");
+    toast("已清空模型路径，翻译将由 Google / NMT 引擎（OPUS/NLLB）承担");
   });
 }
 
@@ -649,9 +681,21 @@ function renderNmt(ms: MtStatus) {
   $<HTMLInputElement>("nmtOpusEnZhPath").value = ms.opusEnZh || "";
   $<HTMLInputElement>("nmtNllbPath").value = ms.nllb || "";
   const line = $<HTMLDivElement>("nmtStatusLine");
-  const head = ms.active === "none" ? "停用" : ms.active === "opus" ? "OPUS 引擎生效" : "NLLB 引擎生效";
+  const head =
+    ms.active === "none" ? "停用" : ms.active === "opus" ? "OPUS 引擎生效" : "NLLB 引擎生效";
   line.className = "model-status-line" + (ms.active === "none" ? " err" : " ok");
   line.textContent = `${head} · ${ms.note}`;
+}
+
+/** Google Translate 连通性状态行（不触网渲染；检测按钮才发起真实请求） */
+function renderGoogle(gs: GoogleStatus) {
+  const line = $<HTMLDivElement>("googleStatusLine");
+  line.className =
+    "model-status-line" + (gs.reachable === true ? " ok" : gs.reachable === false ? " err" : "");
+  line.textContent = gs.note;
+  $<HTMLSpanElement>("googleProxyHint").textContent = gs.proxy
+    ? `经系统代理 ${gs.proxy}`
+    : "直连（未使用系统代理）";
 }
 
 function bindNmtControls() {
@@ -666,6 +710,25 @@ function bindNmtControls() {
   $<HTMLButtonElement>("nmtOpusZhEnBrowse").addEventListener("click", () => void pick("opus_zh_en", "nmtOpusZhEnPath"));
   $<HTMLButtonElement>("nmtOpusEnZhBrowse").addEventListener("click", () => void pick("opus_en_zh", "nmtOpusEnZhPath"));
   $<HTMLButtonElement>("nmtNllbBrowse").addEventListener("click", () => void pick("nllb", "nmtNllbPath"));
+}
+
+/** 「检测」：跑一次最小真实翻译（en→zh hello），刷新 Google 连通性状态行 */
+function bindGoogleControls() {
+  const btn = $<HTMLButtonElement>("googleProbeBtn");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    btn.textContent = "检测中…";
+    try {
+      const gs = await invoke<GoogleStatus>("google_probe");
+      renderGoogle(gs);
+      toast(gs.reachable ? "Google Translate 可用" : "Google Translate 不可用，将按排序回落下一引擎", !gs.reachable);
+    } catch (e) {
+      toast(String(e), true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "检测";
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,7 +1092,7 @@ async function init() {
   fillSelect($<HTMLSelectElement>("ocrSelect"), OCR_LANGS.slice(1).map((l) => l), OCR_LANGS[0]);
   fillSelect($<HTMLSelectElement>("preferredLangSelect"), LANGS);
   fillSelect($<HTMLSelectElement>("secondaryLangSelect"), LANGS);
-  for (const id of ["engineOrder0", "engineOrder1", "engineOrder2", "f5EngineSelect"]) {
+  for (const id of [...ORDER_SLOT_IDS, "f5EngineSelect"]) {
     fillEngineOptions($<HTMLSelectElement>(id));
   }
 
@@ -1056,6 +1119,7 @@ async function init() {
   bindSettingsControls();
   bindModelControls();
   bindNmtControls();
+  bindGoogleControls();
   bindPkgManager();
   bindDrawers();
   bindUpdateControls();
@@ -1098,6 +1162,12 @@ async function init() {
 
   try {
     await invoke<MtStatus>("nmt_status").then(renderNmt);
+  } catch {
+    /* 保持初始 */
+  }
+
+  try {
+    await invoke<GoogleStatus>("google_status").then(renderGoogle);
   } catch {
     /* 保持初始 */
   }

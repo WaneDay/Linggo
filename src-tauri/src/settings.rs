@@ -8,6 +8,9 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager};
 
+/// 0.1.1 及更早的 F5 默认引擎（升级迁移用，见 normalize）
+const LEGACY_DEFAULT_F5_ENGINE: &str = "gguf";
+
 /// %APPDATA%\Linggo —— 固定目录，卸载清理脚本可精准定位（勿随 identifier 变动）
 pub fn app_data_dir() -> PathBuf {
     std::env::var("APPDATA")
@@ -183,14 +186,30 @@ pub fn normalize(mut s: Settings) -> Settings {
     if !(0..=999).contains(&s.gpu_layers) {
         s.gpu_layers = 999;
     }
-    // 引擎排序：只保留合法引擎、去重、顺序不变；不足 3 个回退默认
+    // 引擎排序：只保留合法引擎、去重、顺序不变；旧版 3 引擎配置（0.1.1 及更早）自动把
+    // Google 插到最前（升级即默认谷歌优先），缺项再按默认顺序补齐。
+    let want = crate::constants::ENGINES.len();
+    // 旧版配置标记：排序里没有 Google 即视为 0.1.1 及更早，需要连带迁移 F5 默认引擎
+    let legacy_engine_order = !s
+        .engine_order
+        .iter()
+        .any(|e| e == "google" && crate::constants::is_engine(e));
     let mut order: Vec<String> = Vec::new();
     for e in &s.engine_order {
-        if crate::constants::is_engine(e) && !order.contains(e) && order.len() < 3 {
+        if crate::constants::is_engine(e) && !order.contains(e) && order.len() < want {
             order.push(e.clone());
         }
     }
-    s.engine_order = if order.len() == 3 {
+    // 旧版 3 槽配置：Google 未出现 → 置顶（用户已在 0.1.2 面板里排好的 4 槽配置不受影响）
+    if order.len() < want && !order.iter().any(|e| e == "google") {
+        order.insert(0, "google".to_string());
+    }
+    for e in crate::constants::DEFAULT_ENGINE_ORDER {
+        if order.len() < want && !order.iter().any(|x| x == e) {
+            order.push(e.to_string());
+        }
+    }
+    s.engine_order = if order.len() == want {
         order
     } else {
         crate::constants::DEFAULT_ENGINE_ORDER
@@ -198,7 +217,11 @@ pub fn normalize(mut s: Settings) -> Settings {
             .map(|x| x.to_string())
             .collect()
     };
-    if !crate::constants::is_engine(&s.f5_engine) {
+    // F5 引擎：非法/空 → 默认（Google）。仅当配置为旧版（排序里没有 Google）时，才把
+    // 旧默认 "gguf" 迁移到 Google；0.1.2 里用户主动把 F5 改回 GGUF 会被保留。
+    if !crate::constants::is_engine(&s.f5_engine)
+        || (legacy_engine_order && s.f5_engine == LEGACY_DEFAULT_F5_ENGINE)
+    {
         s.f5_engine = crate::constants::DEFAULT_F5_ENGINE.to_string();
     }
     if !crate::constants::is_valid_lang(&s.preferred_lang) || s.preferred_lang == "auto" {
@@ -272,4 +295,82 @@ pub fn autostart_set(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut s = current(&app);
     s.autostart = enabled;
     apply(&app, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn legacy_settings() -> Settings {
+        Settings {
+            engine_order: crate::constants::LEGACY_ENGINE_ORDER
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            f5_engine: "gguf".to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// 0.1.1 → 0.1.2 升级：旧 3 引擎排序自动变 4 槽，Google 置顶；F5 默认也切到 Google
+    #[test]
+    fn upgrade_migrates_legacy_engine_order_with_google_first() {
+        let s = normalize(legacy_settings());
+        assert_eq!(s.engine_order, vec!["google", "opus", "nllb", "gguf"]);
+        assert_eq!(s.f5_engine, "google");
+    }
+
+    /// 全新安装：4 引擎默认排序 + F5 默认 Google
+    #[test]
+    fn fresh_install_defaults_to_google_first() {
+        let s = normalize(Settings::default());
+        assert_eq!(s.engine_order, vec!["google", "opus", "nllb", "gguf"]);
+        assert_eq!(s.f5_engine, "google");
+    }
+
+    /// 用户自定义的 4 槽排序（含 google 非首位）不被改写
+    #[test]
+    fn custom_four_slot_order_is_preserved() {
+        let s = normalize(Settings {
+            engine_order: vec!["gguf".into(), "google".into(), "opus".into(), "nllb".into()],
+            f5_engine: "opus".into(),
+            ..Default::default()
+        });
+        assert_eq!(s.engine_order, vec!["gguf", "google", "opus", "nllb"]);
+        assert_eq!(s.f5_engine, "opus");
+    }
+
+    /// 旧配置里被用户改过的排序（如 nllb 优先）保留原相对顺序，Google 仍置顶
+    #[test]
+    fn legacy_custom_order_keeps_relative_order_with_google_on_top() {
+        let s = normalize(Settings {
+            engine_order: vec!["nllb".into(), "opus".into(), "gguf".into()],
+            ..Default::default()
+        });
+        assert_eq!(s.engine_order, vec!["google", "nllb", "opus", "gguf"]);
+    }
+
+    /// 非法引擎值被剔除并补齐到 4 槽
+    #[test]
+    fn invalid_engines_are_dropped_and_filled() {
+        let s = normalize(Settings {
+            engine_order: vec!["bogus".into(), "opus".into(), "opus".into()],
+            ..Default::default()
+        });
+        assert_eq!(s.engine_order, vec!["google", "opus", "nllb", "gguf"]);
+    }
+
+    /// 0.1.2 用户在 4 槽面板里主动把 F5 改回 GGUF，保存后不能再被强制改回 Google
+    #[test]
+    fn explicit_gguf_f5_survives_repeated_saves() {
+        let picked = Settings {
+            engine_order: vec!["google".into(), "opus".into(), "nllb".into(), "gguf".into()],
+            f5_engine: "gguf".into(),
+            ..Default::default()
+        };
+        // normalize 会在每次 settings_set 时跑，模拟连续保存三次
+        let s = normalize(normalize(normalize(picked)));
+        assert_eq!(s.f5_engine, "gguf");
+        assert_eq!(s.engine_order, vec!["google", "opus", "nllb", "gguf"]);
+    }
 }
