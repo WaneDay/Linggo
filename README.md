@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%2F11%20x64-0078D4.svg)](#系统要求)
 [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](https://tauri.app/)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../../releases)
 
 ---
 
